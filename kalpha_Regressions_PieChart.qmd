@@ -1,0 +1,224 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## Get Krippendorf Alpha
+
+First, lets load the df
+
+```{r}
+library(tidyverse)
+library(irr)
+
+path_to_df = "/Users/amydoerr/Downloads/Binarytone_included_df.csv"
+
+df <- read_csv(path_to_df)
+
+```
+
+Now lets change the values
+
+```{r}
+df <- df %>% mutate(election = case_when(
+                                          election == "Yes" ~ 1,
+                                          election == "No" ~ 0
+                                        ),
+                    internala = case_when(
+                                          internala == "Yes" ~ 1,
+                                          internala == "No" ~ 0
+                                        ),
+                    externala = case_when(
+                                          externala == "Yes" ~ 1,
+                                          externala == "No" ~ 0
+                                        ),
+                    visstereo = case_when(
+                                          visstereo == "Yes" ~ 1,
+                                          visstereo == "No" ~ 0
+                                        ),
+                    textstereo = case_when(
+                                          textstereo == "Yes" ~ 1,
+                                          textstereo == "No" ~ 0
+                                        ),
+                    visinsult = case_when(
+                                          visinsult == "Yes" ~ 1,
+                                          visinsult == "No" ~ 0
+                                        ),
+                    textinsult = case_when(
+                                          textinsult == "Yes" ~ 1,
+                                          textinsult == "No" ~ 0
+                                        ),
+                    symbolicalleg = case_when(
+                                          symbolicalleg == "Yes" ~ 1,
+                                          symbolicalleg == "No" ~ 0
+                                        ),
+                    textualalleg = case_when(
+                      textualalleg == "Yes" ~ 1,
+                      textualalleg == "No" ~ 0
+                                        ),
+                    tonevis = case_when(
+                                          tonevis == "Positive" ~ 1,
+                                          tonevis == "Negative" ~ -1, 
+                                          TRUE ~ 0
+                                        ),
+                    tonevis = as.factor(tonevis), 
+                    tonetext = case_when(
+                                          tonetext == "Positive" ~ 1,
+                                          tonetext == "Negative" ~ -1, 
+                                          TRUE ~ 0
+                                        ), 
+                    tonetext = as.factor(tonetext))
+```
+
+Now lets pivot the df
+
+```{r}
+df_wide <- df %>% pivot_wider(names_from = CID, values_from = election:tonetext)
+```
+
+Function for getting krip alpha
+
+```{r}
+get_kripp_alpha <- function(var_name){
+  
+  ratings_matrix <- as.matrix(df_wide %>% select(contains(var_name)))
+  #transpose
+  ratings_matrix <- t(ratings_matrix)
+  kripp_alpha_result <- kripp.alpha(ratings_matrix, method = "ordinal")                                        
+  return(kripp_alpha_result)
+}
+```
+
+get results
+
+```{r}
+
+get_kripp_alpha("tonevis")
+```
+
+# run analysis
+
+```{r}
+path_to_full <- '/Users/amydoerr/Downloads/Correct_full_df_CA.csv'
+df <- read_csv(path_to_full)
+```
+
+```{r}
+#recode so that the outcome is a factor
+df <- df %>% mutate(Lib_Con = as.factor(Lib_Con)) #1 cons, 0 liberal
+
+```
+
+## OLS
+
+run OLS (important, the dependent variable needs to be continuous)
+
+```{r}
+fit_ols <- lm(Mean_textualtone ~ Lib_Con+ F1.1 + F1.2 + F1.3, data = df)
+summary(fit_ols)
+```
+
+NOTE: THE VARIABLE IS NOT SIGNIFICANT. I AM INTERPRETING AS IF IT WAS.
+
+**Interpretation**
+
+If F1.1 is present in a meme, the mean textual tone is 0.035 higher than if it is not present. If it is not present, we predict the tone to be -0.027, and if it is present, we predict the tone to be -0.24.
+
+`{r} #make new binary variable} df$new_textualTone <- as.integer(df$Mean_textualtone != 0)`
+
+## Logistic Regression
+```{r}
+
+```
+Run logistic regression (note, you want a binary response variable, if you have multiple categories the easiest is to just recode it a couple of times so that it is 1 vs other).
+
+Note Start with a simple model, and then add more independent variables as you go, if you get an error. I would assess the hypotheses with simple logistic regressions.
+
+```{r}
+fit1 <- glm(Tone_visual_binary ~ Lib_Con , data = df, family=binomial)
+summary(fit1)
+
+```
+
+NOTE, I AM AGAIN PRETENDING IT IS SIGNIFICANT.
+
+Lets imagine that this was significant (which it is not), here is an example of how I would interpret it (maybe this is too detailed, so you might not want to be as detailed for all variables, but this is how I would do it if a variable is significant and seems important).
+
+**Interpretation**
+
+We can see that F1.1 is negatively associated with being a conservertive meme. That is, if F1.1 is present in a meme, the logged odds of the meme being conservative decreases by 0.14. Put differently, if F1.1 is present, the odds of the meme being conservative get multiplied with $e^{-0.14} = 0.86935$. Specifically, this means that if the meme does not have F1.1 present, its odds of being conservative are $e^{0.056} = 1.05796$ and if F1.1 is present, the odds of being conservative are $e^{0.056} + e^{-0.14} = 1.05769 * 0.86935 = 0.9195$
+
+Thus, if F1.1 is not present, the odds are slightly in favor of the meme being conservative, and if F1.1 is present, its slightly in favor of being Liberal.
+
+
+
+```{r}
+file_path <- "/Users/amydoerr/Downloads/pie_chart.png"
+
+# Start the PNG device driver to create a new PNG
+png(file_path, width=800, height=600)
+
+# Assuming df is your data frame with more variables than just F1.1, F1.2, and F1.3
+
+# Select only the variables F1.1, F1.2, and F1.3, and count the number of 1s in each
+counts <- colSums(df[, c("F1.1", "F1.2", "F1.3")] == 1)
+
+# Calculate percentages
+percentages <- round(counts / sum(counts) * 100)
+
+# Custom labels with theme names and percentages
+labels <- paste(c("Election Theme", "Internal Affairs Theme", "External Affairs Theme"), " - ", percentages, "%", sep="")
+
+# Colorblind-friendly colors
+colors <- c("#E69F00", "#56B4E9", "#F0E442")
+
+# Plot the pie chart with custom labels and colorblind-friendly colors
+pie(counts, labels = labels, main = "Pie Chart of All Themes", col = colors)
+
+# End the PNG device driver, saving the pie chart to the file
+dev.off()
+
+```
+
+```{r} 
+# Assuming df is your data frame and F1.1 is the column you're interested in
+numberOfOnes <- sum(df$H1.2 == 1)
+
+# Print the result
+print(numberOfOnes)
+
+# Assuming df is your data frame
+
+# Count the unique cases where either G1.1 or G1.2 or both have the value 1
+numberOfUniqueCases <- sum(df$H1.1 == 1 | df$H1.2 == 1)
+
+# Print the result
+print(numberOfUniqueCases)
+```
+
+```{r}
+# Summary statistics for Mean_textualtone
+summary_stats <- summary(df$Mean_textualtone)
+print(summary_stats)
+
+# Alternatively, calculate specific statistics
+mean_value <- mean(df$Mean_textualtone, na.rm = TRUE) # Mean
+median_value <- median(df$Mean_textualtone, na.rm = TRUE) # Median
+max_value <- max(df$Mean_textualtone, na.rm = TRUE) # Maximum
+min_value <- min(df$Mean_textualtone, na.rm = TRUE) # Minimum
+range_values <- range(df$Mean_textualtone, na.rm = TRUE) # Range (min and max)
+sd_value <- sd(df$Mean_textualtone, na.rm = TRUE) # Standard deviation
+var_value <- var(df$Mean_textualtone, na.rm = TRUE) # Variance
+
+# Print specific statistics
+cat("Mean: ", mean_value, "\n",
+    "Median: ", median_value, "\n",
+    "Maximum: ", max_value, "\n",
+    "Minimum: ", min_value, "\n",
+    "Range: ", range_values, "\n",
+    "Standard Deviation: ", sd_value, "\n",
+    "Variance: ", var_value, "\n")
+
+
+```
